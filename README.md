@@ -51,5 +51,5 @@ For real-time monitoring, SEC_Watcher uses the SEC EDGAR Filings Real-time Strea
 ## Credits
 This project utilizes the sec-api-python (https://github.com/janlukasschroeder/sec-api-python) library developed by Jan Lukas Schroeder. Special thanks to the contributors of this library for providing the tools to access SEC data.
 
-License
+## License
 This project is licensed under the MIT License - see the LICENSE file for details.
