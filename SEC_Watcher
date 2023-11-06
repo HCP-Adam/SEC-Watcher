@@ -1,0 +1,181 @@
+"""
+SEC_Watcher Script
+
+This script monitors real-time SEC 8-K filings for specific keywords related to data breaches and cybersecurity incidents. It uses the SEC API to fetch and process filings, looking for predefined keywords in certain sections of the filings.
+
+Setup:
+- Set SEC_API_KEY environment variable with your SEC API key.
+- Install required Python packages from requirements.txt using `pip install -r requirements.txt`.
+
+Usage:
+- Run the script using `python sec_watcher.py`.
+- The script will print details of relevant filings and record their accession numbers to avoid duplicates.
+"""
+
+import os
+from sec_api import ExtractorApi, FullTextSearchApi
+import socketio
+
+# Get your API key from an environment variable
+api_key = os.getenv('SEC_API_KEY')
+
+# If the API key is not set, raise an error to notify the user
+if not api_key:
+    raise ValueError("Please set the SEC_API_KEY environment variable.")
+
+# Initialize the FullTextSearch API and Extractor API with the API key
+fullTextSearchApi = FullTextSearchApi(api_key=api_key)
+extractorApi = ExtractorApi(api_key=api_key)
+
+# Initialize the socketio client with extra headers for authorization
+sio = socketio.Client(logger=True, engineio_logger=True, headers={'Authorization': f'Bearer {api_key}'})
+
+# Connect to the SEC API without passing the API key in the URL
+sio.connect('https://api.sec-api.io:3334')
+
+# List of keywords that we are interested in finding within the filings
+# These are related to data breaches and cybersecurity incidents
+keywords = [
+    "data breach",
+    "cybersecurity incident",
+    "unauthorized access",
+    "compromised",
+    "data leak",
+    "security breach",
+    "exposed data",
+    "hacked",
+    "phishing",
+    "malware",
+    "ransomware",
+    "IT system",
+    "security measures",
+    "bad actor",
+    "API",
+    "impact assessment",
+    "response measures",
+    "ongoing investigation",
+    "legal proceedings",
+    "financial implications",
+    "regulatory compliance",
+    "risk mitigation",
+    "material effect",
+    "operational disruption",
+    "notification of incident",
+    "forensic investigation",
+    "data security",
+    "privacy incident",
+    "information security",
+    "breach notification",
+    "incident response",
+    "cyber attack",
+    "threat actor",
+    "vulnerability",
+    "encryption",
+    "security incident",
+    "security event",
+    "data protection",
+    "cyber risk",
+    "cyber threat",
+    "network intrusion",
+    "security audit",
+    "security vulnerability",
+    "cybersecurity measures",
+    "data integrity",
+    "incident report",
+    "security breach report",
+    "cybersecurity breach",
+    "information breach",
+    "security compromise",
+    "data confidentiality",
+    "cyber incident",
+    "security infrastructure"
+]
+
+
+# Define the 8-K sections to search for
+# These sections are relevant to the types of events we are monitoring
+sections_to_search = [
+    "1.01", "2.02", "2.06", "3.02", "4.02", "5.02", "7.01", "8.01", "9.01"
+]
+
+# Path to the file where filings are recorded
+# This is used to avoid processing the same filings multiple times
+filings_record_path = "filings_record.txt"
+
+# Function to read recorded filings from the file
+# This helps in maintaining a record of what has already been processed
+def read_recorded_filings():
+    if not os.path.exists(filings_record_path):
+        return set()
+    with open(filings_record_path, 'r') as file:
+        return set(file.read().splitlines())
+
+# Function to write a new filing to the file
+# When a new filing is found, it is recorded to prevent reprocessing
+def record_filing(accession_no):
+    with open(filings_record_path, 'a') as file:
+        file.write(accession_no + '\n')
+
+# Function to process and print filing details
+# This function checks if the filing is new and searches for keywords in the specified sections
+def process_filing(filing, recorded_filings):
+    if filing['accessionNo'] in recorded_filings:
+        return False  # Skip the filing if it's already recorded
+    
+    # Extract and search the specified sections for keywords
+    for section in sections_to_search:
+        section_identifier = section.replace(".", "-")  # Format the section identifier correctly
+        try:
+            section_text = extractorApi.get_section(filing['filingUrl'], section_identifier, "text")
+            if any(keyword.lower() in section_text.lower() for keyword in keywords):
+                 # If a keyword is found, print the details of the filing
+                print(f"Accession Number: {filing['accessionNo']}")
+                print(f"CIK: {filing['cik']}")
+                print(f"Company Name: {filing['companyNameLong']}")
+                print(f"Ticker: {filing['ticker']}")
+                print(f"Description: {filing['description']}")
+                print(f"Form Type: {filing['formType']}")
+                print(f"Document Type: {filing['type']}")
+                print(f"Filing URL: {filing['filingUrl']}")
+                print(f"Filed At: {filing['filedAt']}")
+                print(f"Section {section} Text:")
+                print(section_text)
+                print("--------------------------------------------------\n")
+                record_filing(filing['accessionNo'])  # Record the new filing
+                return True
+        except Exception as e:
+            print(f"An error occurred while processing section {section}: {e}")
+    return False
+
+# Load the set of recorded filings
+recorded_filings = read_recorded_filings()
+
+# Historical search code
+# This part of the code performs a historical search for 8-K filings
+historical_filings = fullTextSearchApi.get_filings({
+    "query": { "formType": "8-K" },
+    "from": "0",
+    "size": "10",
+    "sort": [{ "filedAt": { "order": "desc" } }]
+})
+
+# Process each historical filing
+for filing in historical_filings['filings']:
+    process_filing(filing, recorded_filings)
+
+# Event handler for successful connection
+@sio.on("connect")
+def on_connect():
+    print("Connected to the real-time filings stream.")
+
+# Event handler for receiving a new filing
+@sio.on("filing")
+def on_filing(data):
+    process_filing(data, recorded_filings)
+
+# Keep the script running and listening for new filings
+# If the user interrupts the script (e.g., with Ctrl+C), it will disconnect
+try:
+    sio.wait()
+except KeyboardInterrupt:
+    print("Disconnected from the real-time filings stream.")
