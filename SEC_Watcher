@@ -27,10 +27,15 @@ if not api_key:
 fullTextSearchApi = FullTextSearchApi(api_key=api_key)
 extractorApi = ExtractorApi(api_key=api_key)
 
-# Initialize the socketio client with extra headers for authorization
-sio = socketio.Client(logger=True, engineio_logger=True, headers={'Authorization': f'Bearer {api_key}'})
+# Initialize the socketio client
+sio = socketio.Client(logger=True, engineio_logger=True)
 
 # Connect to the SEC API without passing the API key in the URL
+@sio.event
+def connect():
+    print("Connected to the real-time filings stream.")
+    sio.eio.http.headers.update({'Authorization': f'Bearer {api_key}'})
+
 sio.connect('https://api.sec-api.io:3334')
 
 # List of keywords that we are interested in finding within the filings
