@@ -157,12 +157,18 @@ recorded_filings = read_recorded_filings()
 
 # Historical search code
 # This part of the code performs a historical search for 8-K filings
-historical_filings = fullTextSearchApi.get_filings({
-    "query": { "formType": "8-K" },
-    "from": "0",
-    "size": "10",
-    "sort": [{ "filedAt": { "order": "desc" } }]
-})
+try:
+    historical_filings = fullTextSearchApi.get_filings({
+        "query": { "formType": "8-K" },
+        "from": "0",
+        "size": "10",
+        "sort": [{ "filedAt": { "order": "desc" } }]
+    })
+    # Process each historical filing
+    for filing in historical_filings['filings']:
+        process_filing(filing, recorded_filings)
+except Exception as e:
+    print(f"An error occurred while fetching historical filings: {e}")
 
 # Process each historical filing
 for filing in historical_filings['filings']:
