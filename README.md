@@ -16,7 +16,8 @@ To use SEC_Watcher, you need to obtain an API key from SEC API(https://sec-api.i
 
 Set your SEC API key as an environment variable for security purposes:
 For Windows
-    Using Command Prompt (cmd.exe):
+
+Using Command Prompt (cmd.exe):
         Press Win + R, type cmd, and press Enter to open Command Prompt.
         Type the following command and press Enter
         
