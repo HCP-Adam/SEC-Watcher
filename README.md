@@ -9,9 +9,11 @@ Before running SEC_Watcher, you need to install the necessary dependencies:
 pip install sec-api-python
 
 Getting Started:
+
 To use SEC_Watcher, you need to obtain an API key from SEC API(https://sec-api.io/). Follow the instructions on their website to sign up and receive your API key.
 
 Configuration:
+
 Set your SEC API key as an environment variable for security purposes:
 
 On Windows:
