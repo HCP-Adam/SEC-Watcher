@@ -1,3 +1,33 @@
+"""
+SEC_Watcher
+
+This script monitors real-time and historical SEC 8-K filings for specific keywords related to data breaches and cybersecurity incidents. It uses the SEC API to fetch real-time filings and perform historical searches. The script logs its activity, providing insights into its operations, such as when it starts searching for new filings, when no new filings are found, and any errors encountered.
+
+Features:
+- Real-time monitoring of SEC filings for specific keywords.
+- Historical search for past filings based on the provided date range.
+- Console logging for real-time operation insights and error tracking.
+- Persistent recording of processed filings to prevent duplicate processing.
+
+Prerequisites:
+- An API key from SEC API is required to access the filing data.
+- The `sec-api-python` library and other dependencies must be installed.
+- The SEC API key must be set as an environment variable for security.
+
+Usage:
+1. Set the SEC_API_KEY environment variable with your personal API key from SEC API.
+2. Install the required dependencies using `pip install sec-api-python socketio-client requests python-dotenv`.
+3. Run the script with `python sec_watcher.py`.
+
+The script will automatically connect to the SEC EDGAR Filings Real-time Stream API and start monitoring for new filings. It will also perform a historical search from the specified start date and log all activities to the console.
+
+Make sure to handle the `KeyboardInterrupt` to gracefully stop the script and disconnect from the API.
+
+License:
+This project is licensed under the MIT License. See the LICENSE file for more details.
+"""
+
+
 from sec_api import FullTextSearchApi
 import socketio
 import time
