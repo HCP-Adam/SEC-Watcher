@@ -1,20 +1,9 @@
-"""
-SEC_Watcher Script
-
-This script monitors real-time SEC 8-K filings for specific keywords related to data breaches and cybersecurity incidents. It uses the SEC API to fetch and process filings, looking for predefined keywords in certain sections of the filings.
-
-Setup:
-- Set SEC_API_KEY environment variable with your SEC API key.
-- Install required Python packages from requirements.txt using `pip install -r requirements.txt`.
-
-Usage:
-- Run the script using `python sec_watcher.py`.
-- The script will print details of relevant filings and record their accession numbers to avoid duplicates.
-"""
-
-import os
-from sec_api import ExtractorApi, FullTextSearchApi
+from sec_api import FullTextSearchApi
 import socketio
+import time
+import os
+from datetime import datetime  # Add this line to import the datetime module
+
 
 # Get your API key from an environment variable
 api_key = os.getenv('SEC_API_KEY')
@@ -23,23 +12,10 @@ api_key = os.getenv('SEC_API_KEY')
 if not api_key:
     raise ValueError("Please set the SEC_API_KEY environment variable.")
 
-# Initialize the FullTextSearch API and Extractor API with the API key
+# Initialize the FullTextSearch API with your API key
 fullTextSearchApi = FullTextSearchApi(api_key=api_key)
-extractorApi = ExtractorApi(api_key=api_key)
 
-# Initialize the socketio client
-sio = socketio.Client(logger=True, engineio_logger=True)
-
-# Connect to the SEC API without passing the API key in the URL
-@sio.event
-def connect():
-    print("Connected to the real-time filings stream.")
-    sio.eio.http.headers.update({'Authorization': f'Bearer {api_key}'})
-
-sio.connect('https://api.sec-api.io:3334')
-
-# List of keywords that we are interested in finding within the filings
-# These are related to data breaches and cybersecurity incidents
+# Define your keywords for data breaches
 keywords = [
     "data breach",
     "cybersecurity incident",
@@ -96,19 +72,10 @@ keywords = [
     "security infrastructure"
 ]
 
-
-# Define the 8-K sections to search for
-# These sections are relevant to the types of events we are monitoring
-sections_to_search = [
-    "1.01", "1.05", "2.02", "2.06", "3.02", "4.02", "5.02", "7.01", "8.01", "9.01"
-]
-
 # Path to the file where filings are recorded
-# This is used to avoid processing the same filings multiple times
 filings_record_path = "filings_record.txt"
 
 # Function to read recorded filings from the file
-# This helps in maintaining a record of what has already been processed
 def read_recorded_filings():
     if not os.path.exists(filings_record_path):
         return set()
@@ -116,77 +83,90 @@ def read_recorded_filings():
         return set(file.read().splitlines())
 
 # Function to write a new filing to the file
-# When a new filing is found, it is recorded to prevent reprocessing
 def record_filing(accession_no):
     with open(filings_record_path, 'a') as file:
         file.write(accession_no + '\n')
 
 # Function to process and print filing details
-# This function checks if the filing is new and searches for keywords in the specified sections
 def process_filing(filing, recorded_filings):
     if filing['accessionNo'] in recorded_filings:
         return False  # Skip the filing if it's already recorded
-    
-    # Extract and search the specified sections for keywords
-    for section in sections_to_search:
-        section_identifier = section.replace(".", "-")  # Format the section identifier correctly
-        try:
-            section_text = extractorApi.get_section(filing['filingUrl'], section_identifier, "text")
-            if any(keyword.lower() in section_text.lower() for keyword in keywords):
-                 # If a keyword is found, print the details of the filing
-                print(f"Accession Number: {filing['accessionNo']}")
-                print(f"CIK: {filing['cik']}")
-                print(f"Company Name: {filing['companyNameLong']}")
-                print(f"Ticker: {filing['ticker']}")
-                print(f"Description: {filing['description']}")
-                print(f"Form Type: {filing['formType']}")
-                print(f"Document Type: {filing['type']}")
-                print(f"Filing URL: {filing['filingUrl']}")
-                print(f"Filed At: {filing['filedAt']}")
-                print(f"Section {section} Text:")
-                print(section_text)
-                print("--------------------------------------------------\n")
-                record_filing(filing['accessionNo'])  # Record the new filing
-                return True
-        except Exception as e:
-            print(f"An error occurred while processing section {section}: {e}")
-    return False
+    print(f"Accession Number: {filing['accessionNo']}")
+    print(f"CIK: {filing['cik']}")
+    print(f"Company Name: {filing['companyNameLong']}")
+    print(f"Ticker: {filing['ticker']}")
+    print(f"Description: {filing['description']}")
+    print(f"Form Type: {filing['formType']}")
+    print(f"Document Type: {filing['type']}")
+    print(f"Filing URL: {filing['filingUrl']}")
+    print(f"Filed At: {filing['filedAt']}")
+    print("--------------------------------------------------\n")
+    record_filing(filing['accessionNo'])  # Record the new filing
+    return True
 
 # Load the set of recorded filings
 recorded_filings = read_recorded_filings()
 
+# Initialize the socket.io client
+sio = socketio.Client()
+
+# Event handler for successful connection
+@sio.on("connect", namespace="/all-filings")
+def on_connect():
+    print("Connected to the real-time SEC filings stream.")
+
+# Event handler for receiving filings
+@sio.on("filing", namespace="/all-filings")
+def on_filings(data):
+    # Here you can process the real-time filings
+    # For example, check if the filing contains any of the keywords
+    for keyword in keywords:
+        if keyword.lower() in data['description'].lower():
+            process_filing(data, recorded_filings)
+            break  # If a keyword is found, no need to check further
+
+# Connect to the real-time filings stream
+sio.connect("https://api.sec-api.io:3334", namespaces=["/all-filings"], transports=["websocket"])
+
+# Start the non-blocking event loop for the socket.io client
+sio.start_background_task(sio.wait)
+
 # Historical search code
-# This part of the code performs a historical search for 8-K filings
-try:
-    historical_filings = fullTextSearchApi.get_filings({
-        "query": { "formType": "8-K" },
-        "from": "0",
-        "size": "10",
-        "sort": [{ "filedAt": { "order": "desc" } }]
-    })
-    # Process each historical filing
-    for filing in historical_filings['filings']:
-        process_filing(filing, recorded_filings)
-except Exception as e:
-    print(f"An error occurred while fetching historical filings: {e}")
+# Get today's date in the required format
+today_date = datetime.now().strftime('%Y-%m-%d')
+
+# Join the keywords into a single string query with OR operator
+keywords_query = ' OR '.join(f'"{keyword}"' for keyword in keywords)
+
+# Define your query parameters for the historical search
+historical_query = {
+    "query": keywords_query,
+    "formTypes": ['8-K'],
+    "startDate": '2021-01-01',
+    "endDate": today_date,  # Set the end date to today's date
+}
+
+# Fetch the historical filings
+historical_filings = fullTextSearchApi.get_filings(historical_query)
+
+# Flag to check if new filings were found
+new_filings_found = False
 
 # Process each historical filing
 for filing in historical_filings['filings']:
-    process_filing(filing, recorded_filings)
+    if process_filing(filing, recorded_filings):
+        new_filings_found = True
 
-# Event handler for successful connection
-@sio.on("connect")
-def on_connect():
-    print("Connected to the real-time filings stream.")
+# If no new filings were found, print the message
+if not new_filings_found:
+    print("No new filings found.")
 
-# Event handler for receiving a new filing
-@sio.on("filing")
-def on_filing(data):
-    process_filing(data, recorded_filings)
-
-# Keep the script running and listening for new filings
-# If the user interrupts the script (e.g., with Ctrl+C), it will disconnect
+# Keep the program running
 try:
-    sio.wait()
+    while True:
+        time.sleep(1)  # Sleep to reduce CPU usage
 except KeyboardInterrupt:
-    print("Disconnected from the real-time filings stream.")
+    # Handle any other way of stopping the script
+    print("Script interrupted, stopping...")
+finally:
+    sio.disconnect()  # Ensure the socket.io client is disconnected
