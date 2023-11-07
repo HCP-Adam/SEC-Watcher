@@ -90,6 +90,7 @@ def record_filing(accession_no):
 # Function to process and print filing details
 def process_filing(filing, recorded_filings):
     if filing['accessionNo'] in recorded_filings:
+        print(f"Accession Number: {filing['accessionNo']} already processed.")
         return False  # Skip the filing if it's already recorded
     print(f"Accession Number: {filing['accessionNo']}")
     print(f"CIK: {filing['cik']}")
@@ -101,7 +102,7 @@ def process_filing(filing, recorded_filings):
     print(f"Filing URL: {filing['filingUrl']}")
     print(f"Filed At: {filing['filedAt']}")
     print("--------------------------------------------------\n")
-    record_filing(filing['accessionNo'])  # Record the new filing
+    print(f"Processed filing: {filing['accessionNo']}")
     return True
 
 # Load the set of recorded filings
@@ -132,8 +133,8 @@ sio.connect("https://api.sec-api.io:3334", namespaces=["/all-filings"], transpor
 sio.start_background_task(sio.wait)
 
 # Historical search code
-# Get today's date in the required format
-today_date = datetime.now().strftime('%Y-%m-%d')
+print("Starting historical search for filings.")
+today_date = datetime.now().strftime('%Y-%m-%d')  # Get today's date in the required format
 
 # Join the keywords into a single string query with OR operator
 keywords_query = ' OR '.join(f'"{keyword}"' for keyword in keywords)
@@ -142,7 +143,7 @@ keywords_query = ' OR '.join(f'"{keyword}"' for keyword in keywords)
 historical_query = {
     "query": keywords_query,
     "formTypes": ['8-K'],
-    "startDate": '2021-01-01',
+    "startDate": '2021-01-01',  # You can adjust this date as needed
     "endDate": today_date,  # Set the end date to today's date
 }
 
@@ -164,9 +165,10 @@ if not new_filings_found:
 # Keep the program running
 try:
     while True:
+        print("Script is running... waiting for new filings.")
         time.sleep(1)  # Sleep to reduce CPU usage
 except KeyboardInterrupt:
-    # Handle any other way of stopping the script
-    print("Script interrupted, stopping...")
+    print("Script interrupted by user, stopping...")
 finally:
     sio.disconnect()  # Ensure the socket.io client is disconnected
+    print("Disconnected from SEC API stream.")
